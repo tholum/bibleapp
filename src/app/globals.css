@@ -53,6 +53,39 @@ body {
   transform: scale(1.05);
 }
 
+/* Dark mode Bible text styling for focused study */
+.bible-text-dark {
+  font-size: 1.25rem;
+  line-height: 2;
+  color: #e5e7eb;
+}
+
+.bible-text-dark p {
+  margin-bottom: 1.5rem;
+}
+
+.bible-text-dark .v {
+  font-weight: 600;
+  color: #60a5fa;
+  font-size: 0.7em;
+  vertical-align: super;
+  margin-right: 0.25rem;
+  opacity: 0.8;
+}
+
+.bible-text-dark .wj {
+  color: #f87171;
+}
+
+/* Custom background for study mode */
+.bg-gray-850 {
+  background-color: #1a1d24;
+}
+
+.bg-gray-750 {
+  background-color: #2d3139;
+}
+
 .bible-text .wj {
   color: #dc2626;
 }

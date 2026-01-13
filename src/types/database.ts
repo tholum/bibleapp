@@ -265,6 +265,9 @@ export interface Database {
           title: string | null;
           content: string;
           strongs_references: string[] | null;
+          selected_word: string | null;
+          bible_version_id: string | null;
+          bible_version_name: string | null;
           is_private: boolean;
           created_at: string;
           updated_at: string;
@@ -282,6 +285,9 @@ export interface Database {
           title?: string | null;
           content: string;
           strongs_references?: string[] | null;
+          selected_word?: string | null;
+          bible_version_id?: string | null;
+          bible_version_name?: string | null;
           is_private?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -299,6 +305,9 @@ export interface Database {
           title?: string | null;
           content?: string;
           strongs_references?: string[] | null;
+          selected_word?: string | null;
+          bible_version_id?: string | null;
+          bible_version_name?: string | null;
           is_private?: boolean;
           created_at?: string;
           updated_at?: string;

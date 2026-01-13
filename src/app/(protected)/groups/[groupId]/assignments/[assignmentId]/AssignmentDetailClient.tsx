@@ -184,7 +184,7 @@ export default function AssignmentDetailPage() {
             )}
           </div>
           <Link
-            href={`/groups/${groupId}/assignments/${assignmentId}/study/`}
+            href={`/study/${groupId}/${assignmentId}/`}
           >
             <Button size="lg">
               <Play className="h-5 w-5 mr-2" />
@@ -287,7 +287,7 @@ export default function AssignmentDetailPage() {
             <Eye className="h-5 w-5 mr-2 text-gray-500" />
             Recent Observations
           </CardTitle>
-          <Link href={`/groups/${groupId}/assignments/${assignmentId}/study/`}>
+          <Link href={`/study/${groupId}/${assignmentId}/`}>
             <Button variant="ghost" size="sm">
               View all
             </Button>
@@ -325,7 +325,7 @@ export default function AssignmentDetailPage() {
               <BookOpen className="h-12 w-12 text-gray-300 mx-auto mb-3" />
               <p className="text-gray-500">No observations yet</p>
               <Link
-                href={`/groups/${groupId}/assignments/${assignmentId}/study/`}
+                href={`/study/${groupId}/${assignmentId}/`}
               >
                 <Button size="sm" className="mt-4">
                   Add First Observation
