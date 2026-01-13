@@ -17,6 +17,8 @@ import {
   ExternalLink,
   X,
   BookOpen,
+  Search,
+  Check,
 } from "lucide-react";
 import { getPassage, getBibles, buildPassageId, DEFAULT_BIBLE_ID } from "@/lib/api-bible/client";
 import type { ObservationCategory, Assignment, Observation, ObservationInsert } from "@/types/database";
@@ -122,6 +124,21 @@ export default function StudyPage() {
   const [showMyObservations, setShowMyObservations] = useState(true);
   const [showGroupObservations, setShowGroupObservations] = useState(true);
   const [selectedBibleId, setSelectedBibleId] = useState(DEFAULT_BIBLE_ID);
+  const [bibleDropdownOpen, setBibleDropdownOpen] = useState(false);
+  const [bibleSearchQuery, setBibleSearchQuery] = useState("");
+  const bibleDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close Bible dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (bibleDropdownRef.current && !bibleDropdownRef.current.contains(e.target as Node)) {
+        setBibleDropdownOpen(false);
+        setBibleSearchQuery("");
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Fetch available Bibles
   const { data: bibles } = useQuery({
@@ -135,6 +152,15 @@ export default function StudyPage() {
 
   // Filter to English Bibles for the dropdown
   const englishBibles = bibles?.filter(b => b.language.id === "eng") || [];
+
+  // Filter bibles by search query
+  const filteredBibles = englishBibles.filter(bible =>
+    bible.name.toLowerCase().includes(bibleSearchQuery.toLowerCase()) ||
+    bible.abbreviation.toLowerCase().includes(bibleSearchQuery.toLowerCase())
+  );
+
+  // Get selected Bible info for display
+  const selectedBible = englishBibles.find(b => b.id === selectedBibleId);
 
   // Handle verse click in passage
   const handlePassageClick = useCallback((e: MouseEvent) => {
@@ -321,17 +347,68 @@ export default function StudyPage() {
                   Scripture
                 </CardTitle>
                 {englishBibles.length > 0 && (
-                  <select
-                    value={selectedBibleId}
-                    onChange={(e) => setSelectedBibleId(e.target.value)}
-                    className="text-sm px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                  >
-                    {englishBibles.map((bible) => (
-                      <option key={bible.id} value={bible.id}>
-                        {bible.abbreviation} - {bible.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div ref={bibleDropdownRef} className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setBibleDropdownOpen(!bibleDropdownOpen)}
+                      className="flex items-center gap-2 text-sm px-3 py-1.5 border border-gray-300 rounded-lg hover:border-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white min-w-0 max-w-[180px]"
+                    >
+                      <span className="truncate">
+                        {selectedBible?.abbreviation || "Select"}
+                      </span>
+                      <ChevronDown className={`h-4 w-4 flex-shrink-0 text-gray-400 transition-transform ${bibleDropdownOpen ? "rotate-180" : ""}`} />
+                    </button>
+
+                    {bibleDropdownOpen && (
+                      <div className="absolute right-0 top-full mt-1 w-72 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                        <div className="p-2 border-b border-gray-100">
+                          <div className="relative">
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                            <input
+                              type="text"
+                              value={bibleSearchQuery}
+                              onChange={(e) => setBibleSearchQuery(e.target.value)}
+                              placeholder="Search translations..."
+                              className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              autoFocus
+                            />
+                          </div>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto">
+                          {filteredBibles.length > 0 ? (
+                            filteredBibles.map((bible) => (
+                              <button
+                                key={bible.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedBibleId(bible.id);
+                                  setBibleDropdownOpen(false);
+                                  setBibleSearchQuery("");
+                                }}
+                                className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 ${
+                                  bible.id === selectedBibleId ? "bg-blue-50" : ""
+                                }`}
+                              >
+                                <span className="font-medium text-gray-900 w-12 flex-shrink-0">
+                                  {bible.abbreviation}
+                                </span>
+                                <span className="text-gray-600 truncate flex-1">
+                                  {bible.name}
+                                </span>
+                                {bible.id === selectedBibleId && (
+                                  <Check className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                                )}
+                              </button>
+                            ))
+                          ) : (
+                            <div className="px-3 py-4 text-sm text-gray-500 text-center">
+                              No translations found
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </CardHeader>
