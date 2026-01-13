@@ -46,8 +46,6 @@ export default function CreateGroupPage() {
     mutationFn: async (data: CreateGroupForm): Promise<StudyGroup> => {
       if (!user?.id) throw new Error("Not authenticated");
 
-      console.log("Creating group with user ID:", user.id);
-
       // Create the group (trigger auto-adds creator as owner)
       const newGroup: StudyGroupInsert = {
         name: data.name,
@@ -55,15 +53,11 @@ export default function CreateGroupPage() {
         created_by: user.id,
       };
 
-      console.log("Insert payload:", newGroup);
-
       const { data: group, error: groupError } = await supabase
         .from("study_groups")
         .insert(newGroup as never)
         .select()
         .single();
-
-      console.log("Insert result:", { group, groupError });
 
       if (groupError) throw groupError;
 
