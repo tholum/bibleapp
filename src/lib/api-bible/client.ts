@@ -1,7 +1,7 @@
 const API_BIBLE_BASE_URL = "https://rest.api.bible/v1";
 
-// Default to KJV if no API key is set
-const DEFAULT_BIBLE_ID = "de4e12af7f28f599-02"; // KJV
+// Default to BSB (Berean Standard Bible) - modern, accurate translation
+export const DEFAULT_BIBLE_ID = "bba9f40183526463-01"; // BSB
 
 interface ApiBibleResponse<T> {
   data: T;
