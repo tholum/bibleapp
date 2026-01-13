@@ -1,4 +1,4 @@
-const API_BIBLE_BASE_URL = "https://api.scripture.api.bible/v1";
+const API_BIBLE_BASE_URL = "https://rest.api.bible/v1";
 
 // Default to KJV if no API key is set
 const DEFAULT_BIBLE_ID = "de4e12af7f28f599-02"; // KJV
@@ -73,7 +73,9 @@ async function apiBibleFetch<T>(endpoint: string, apiKey: string): Promise<T | n
     });
 
     if (!response.ok) {
-      throw new Error(`API.Bible error: ${response.statusText}`);
+      const errorText = await response.text();
+      console.error(`API.Bible error ${response.status}:`, errorText);
+      throw new Error(`API.Bible error (${response.status}): ${errorText || response.statusText}`);
     }
 
     const result: ApiBibleResponse<T> = await response.json();
