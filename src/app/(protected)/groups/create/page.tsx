@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/Card";
 import { ArrowLeft, Users } from "lucide-react";
 import Link from "next/link";
-import type { StudyGroup, StudyGroupInsert, GroupMembershipInsert } from "@/types/database";
+import type { StudyGroup, StudyGroupInsert } from "@/types/database";
 
 const createGroupSchema = z.object({
   name: z.string().min(3, "Group name must be at least 3 characters"),
@@ -46,7 +46,7 @@ export default function CreateGroupPage() {
     mutationFn: async (data: CreateGroupForm): Promise<StudyGroup> => {
       if (!user?.id) throw new Error("Not authenticated");
 
-      // Create the group
+      // Create the group (trigger auto-adds creator as owner)
       const newGroup: StudyGroupInsert = {
         name: data.name,
         description: data.description || null,
@@ -60,19 +60,6 @@ export default function CreateGroupPage() {
         .single();
 
       if (groupError) throw groupError;
-
-      // Add the creator as owner
-      const newMembership: GroupMembershipInsert = {
-        group_id: (group as StudyGroup).id,
-        user_id: user.id,
-        role: "owner",
-      };
-
-      const { error: membershipError } = await supabase
-        .from("group_memberships")
-        .insert(newMembership as never);
-
-      if (membershipError) throw membershipError;
 
       return group as StudyGroup;
     },
