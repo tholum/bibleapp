@@ -35,6 +35,24 @@ body {
   margin-right: 0.25rem;
 }
 
+/* Make verse numbers clickable in study mode */
+.passage-clickable .v {
+  cursor: pointer;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+.passage-clickable .v:hover {
+  background-color: #dbeafe;
+  transform: scale(1.1);
+}
+
+.passage-clickable .v:active {
+  background-color: #bfdbfe;
+  transform: scale(1.05);
+}
+
 .bible-text .wj {
   color: #dc2626;
 }

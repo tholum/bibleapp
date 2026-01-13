@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
@@ -16,8 +16,9 @@ import {
   ChevronUp,
   ExternalLink,
   X,
+  BookOpen,
 } from "lucide-react";
-import { getPassage, buildPassageId, DEFAULT_BIBLE_ID } from "@/lib/api-bible/client";
+import { getPassage, getBibles, buildPassageId, DEFAULT_BIBLE_ID } from "@/lib/api-bible/client";
 import type { ObservationCategory, Assignment, Observation, ObservationInsert } from "@/types/database";
 import { Settings } from "lucide-react";
 
@@ -111,6 +112,7 @@ export default function StudyPage() {
   const { user, profile } = useAuthStore();
   const queryClient = useQueryClient();
   const apiKey = profile?.api_bible_key;
+  const passageRef = useRef<HTMLDivElement>(null);
 
   const [selectedVerse, setSelectedVerse] = useState<number | null>(null);
   const [showObservationForm, setShowObservationForm] = useState(false);
@@ -119,6 +121,57 @@ export default function StudyPage() {
     useState<ObservationCategory>("general_note");
   const [showMyObservations, setShowMyObservations] = useState(true);
   const [showGroupObservations, setShowGroupObservations] = useState(true);
+  const [selectedBibleId, setSelectedBibleId] = useState(DEFAULT_BIBLE_ID);
+
+  // Fetch available Bibles
+  const { data: bibles } = useQuery({
+    queryKey: ["bibles", apiKey],
+    queryFn: async () => {
+      if (!apiKey) return null;
+      return getBibles(apiKey);
+    },
+    enabled: !!apiKey,
+  });
+
+  // Filter to English Bibles for the dropdown
+  const englishBibles = bibles?.filter(b => b.language.id === "eng") || [];
+
+  // Handle verse click in passage
+  const handlePassageClick = useCallback((e: MouseEvent) => {
+    const target = e.target as HTMLElement;
+    // Look for verse number elements (API.Bible typically uses .v class or data-vid attribute)
+    const verseEl = target.closest('[data-vid], .v, .verse-num');
+    if (verseEl) {
+      // Try to extract verse number
+      const vid = verseEl.getAttribute('data-vid');
+      const text = verseEl.textContent || '';
+      let verseNum: number | null = null;
+
+      if (vid) {
+        // Extract verse from data-vid (format like "GEN.1.1")
+        const parts = vid.split('.');
+        verseNum = parseInt(parts[parts.length - 1], 10);
+      } else {
+        // Try to parse from text content
+        const match = text.match(/(\d+)/);
+        if (match) verseNum = parseInt(match[1], 10);
+      }
+
+      if (verseNum && !isNaN(verseNum)) {
+        setSelectedVerse(verseNum);
+        setShowObservationForm(true);
+      }
+    }
+  }, []);
+
+  // Attach click handler to passage content
+  useEffect(() => {
+    const el = passageRef.current;
+    if (el) {
+      el.addEventListener('click', handlePassageClick);
+      return () => el.removeEventListener('click', handlePassageClick);
+    }
+  }, [handlePassageClick]);
 
   // Fetch assignment
   const { data: assignment } = useQuery({
@@ -145,7 +198,7 @@ export default function StudyPage() {
 
   // Fetch passage from API.Bible
   const { data: passage, isLoading: passageLoading } = useQuery({
-    queryKey: ["passage", apiKey, assignment?.bible_books?.abbreviation, assignment?.start_chapter, assignment?.start_verse, assignment?.end_chapter, assignment?.end_verse],
+    queryKey: ["passage", apiKey, selectedBibleId, assignment?.bible_books?.abbreviation, assignment?.start_chapter, assignment?.start_verse, assignment?.end_chapter, assignment?.end_verse],
     queryFn: async (): Promise<PassageResult> => {
       if (!assignment?.bible_books?.abbreviation || !apiKey) return null;
 
@@ -157,7 +210,7 @@ export default function StudyPage() {
         assignment.end_verse
       );
 
-      return getPassage(apiKey, DEFAULT_BIBLE_ID, passageId, {
+      return getPassage(apiKey, selectedBibleId, passageId, {
         contentType: "html",
         includeVerseNumbers: true,
       });
@@ -262,7 +315,25 @@ export default function StudyPage() {
         <div>
           <Card>
             <CardHeader>
-              <CardTitle>Scripture</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center">
+                  <BookOpen className="h-5 w-5 mr-2 text-blue-600" />
+                  Scripture
+                </CardTitle>
+                {englishBibles.length > 0 && (
+                  <select
+                    value={selectedBibleId}
+                    onChange={(e) => setSelectedBibleId(e.target.value)}
+                    className="text-sm px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  >
+                    {englishBibles.map((bible) => (
+                      <option key={bible.id} value={bible.id}>
+                        {bible.abbreviation} - {bible.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               {passageLoading ? (
@@ -276,7 +347,8 @@ export default function StudyPage() {
                 </div>
               ) : passage?.content ? (
                 <div
-                  className="prose prose-sm max-w-none bible-text"
+                  ref={passageRef}
+                  className="prose prose-sm max-w-none bible-text passage-clickable"
                   dangerouslySetInnerHTML={{ __html: passage.content }}
                 />
               ) : !apiKey ? (
