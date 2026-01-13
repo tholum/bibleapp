@@ -51,7 +51,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
               .single();
 
             if (profileError) {
-              console.error("Error fetching profile:", profileError);
+              // Profile might not exist - try to create it
+              console.warn("Profile not found, creating one...");
+              const displayName =
+                session.user.user_metadata?.full_name ||
+                session.user.email?.split("@")[0] ||
+                "User";
+              const { data: newProfile, error: createError } = await supabase
+                .from("profiles")
+                .insert({
+                  id: session.user.id,
+                  email: session.user.email,
+                  display_name: displayName,
+                } as never)
+                .select()
+                .single();
+
+              if (createError) {
+                console.error("Error creating profile:", createError);
+              } else {
+                setProfile(newProfile);
+              }
             } else {
               setProfile(profile);
             }
@@ -90,7 +110,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
             .single();
 
           if (profileError) {
-            console.error("Error fetching profile on auth change:", profileError);
+            // Profile might not exist - try to create it
+            console.warn("Profile not found on auth change, creating one...");
+            const displayName =
+              session.user.user_metadata?.full_name ||
+              session.user.email?.split("@")[0] ||
+              "User";
+            const { data: newProfile, error: createError } = await supabase
+              .from("profiles")
+              .insert({
+                id: session.user.id,
+                email: session.user.email,
+                display_name: displayName,
+              } as never)
+              .select()
+              .single();
+
+            if (createError) {
+              console.error("Error creating profile on auth change:", createError);
+            } else {
+              setProfile(newProfile);
+            }
           } else {
             setProfile(profile);
           }

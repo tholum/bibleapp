@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { useAuthStore } from "@/stores/authStore";
+import { useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -22,12 +23,30 @@ type GroupMembershipWithGroup = {
 };
 
 export default function GroupsPage() {
-  const { user } = useAuthStore();
+  const { user, session } = useAuthStore();
+
+  console.log("GroupsPage - user:", user?.id, "session:", !!session);
+
+  // Debug: Check actual Supabase session
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data, error }) => {
+      console.log("Supabase session check:", {
+        hasSession: !!data.session,
+        userId: data.session?.user?.id,
+        error,
+      });
+    });
+  }, []);
 
   const { data: groups, isLoading } = useQuery({
-    queryKey: ["user-groups"],
+    queryKey: ["user-groups", user?.id],
     queryFn: async (): Promise<GroupMembershipWithGroup[]> => {
-      if (!user?.id) return [];
+      if (!user?.id) {
+        console.log("No user ID available");
+        return [];
+      }
+
+      console.log("Fetching groups for user:", user.id);
 
       const { data, error } = await supabase
         .from("group_memberships")
@@ -46,6 +65,8 @@ export default function GroupsPage() {
         )
         .eq("user_id", user.id)
         .order("joined_at", { ascending: false });
+
+      console.log("Groups query result:", { data, error });
 
       if (error) throw error;
       return (data as GroupMembershipWithGroup[]) || [];
