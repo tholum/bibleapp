@@ -374,7 +374,7 @@ export default function StudyPage() {
                             />
                           </div>
                         </div>
-                        <div className="max-h-64 overflow-y-auto">
+                        <div className="max-h-64 overflow-y-auto py-1">
                           {filteredBibles.length > 0 ? (
                             filteredBibles.map((bible) => (
                               <button
@@ -385,18 +385,20 @@ export default function StudyPage() {
                                   setBibleDropdownOpen(false);
                                   setBibleSearchQuery("");
                                 }}
-                                className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 ${
+                                className={`w-full flex items-start gap-3 px-3 py-2 text-left hover:bg-gray-50 ${
                                   bible.id === selectedBibleId ? "bg-blue-50" : ""
                                 }`}
                               >
-                                <span className="font-medium text-gray-900 w-12 flex-shrink-0">
-                                  {bible.abbreviation}
-                                </span>
-                                <span className="text-gray-600 truncate flex-1">
-                                  {bible.name}
-                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-sm text-gray-900">
+                                    {bible.abbreviation}
+                                  </div>
+                                  <div className="text-xs text-gray-500 truncate">
+                                    {bible.name}
+                                  </div>
+                                </div>
                                 {bible.id === selectedBibleId && (
-                                  <Check className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                                  <Check className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
                                 )}
                               </button>
                             ))
