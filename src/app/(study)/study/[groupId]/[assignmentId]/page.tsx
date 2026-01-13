@@ -102,7 +102,7 @@ export default function FocusedStudyPage() {
   const [selectedCategory, setSelectedCategory] = useState<ObservationCategory>("general_note");
 
   // View toggle for observations
-  const [observationView, setObservationView] = useState<"my" | "group">("my");
+  const [observationView, setObservationView] = useState<"all" | "my" | "group">("all");
 
   // Close context menu when clicking outside
   useEffect(() => {
@@ -210,14 +210,14 @@ export default function FocusedStudyPage() {
     });
   }, []);
 
-  // Attach context menu handler
+  // Attach context menu handler - re-attach when passage loads
   useEffect(() => {
     const el = passageRef.current;
-    if (el) {
+    if (el && passage?.content) {
       el.addEventListener("contextmenu", handleContextMenu);
       return () => el.removeEventListener("contextmenu", handleContextMenu);
     }
-  }, [handleContextMenu]);
+  }, [handleContextMenu, passage?.content]);
 
   // Fetch available Bibles
   const { data: bibles } = useQuery({
@@ -349,7 +349,12 @@ export default function FocusedStudyPage() {
 
   const myObservations = observations?.filter(o => o.user_id === user?.id) || [];
   const groupObservations = observations?.filter(o => o.user_id !== user?.id) || [];
-  const displayedObservations = observationView === "my" ? myObservations : groupObservations;
+  const allObservations = observations || [];
+  const displayedObservations = observationView === "all"
+    ? allObservations
+    : observationView === "my"
+      ? myObservations
+      : groupObservations;
 
   return (
     <div className="h-screen flex flex-col bg-gray-900 text-gray-100">
@@ -548,6 +553,17 @@ export default function FocusedStudyPage() {
             {/* Observation Tabs */}
             <div className="flex border-b border-gray-700">
               <button
+                onClick={() => setObservationView("all")}
+                className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                  observationView === "all"
+                    ? "text-purple-400 border-b-2 border-purple-400"
+                    : "text-gray-400 hover:text-white"
+                }`}
+              >
+                <BookOpen className="h-4 w-4 inline mr-2" />
+                All ({allObservations.length})
+              </button>
+              <button
                 onClick={() => setObservationView("my")}
                 className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
                   observationView === "my"
@@ -556,7 +572,7 @@ export default function FocusedStudyPage() {
                 }`}
               >
                 <MessageSquare className="h-4 w-4 inline mr-2" />
-                My Notes ({myObservations.length})
+                Mine ({myObservations.length})
               </button>
               <button
                 onClick={() => setObservationView("group")}
@@ -574,46 +590,51 @@ export default function FocusedStudyPage() {
             {/* Observations List */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {displayedObservations.length > 0 ? (
-                displayedObservations.map(obs => (
-                  <div
-                    key={obs.id}
-                    className={`p-3 rounded-lg ${
-                      observationView === "my" ? "bg-blue-900/30" : "bg-gray-700/50"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-medium text-blue-400 bg-blue-900/50 px-2 py-0.5 rounded">
-                          v{obs.start_verse}
-                        </span>
-                        {obs.selected_word && (
-                          <span className="text-xs text-purple-400 bg-purple-900/30 px-2 py-0.5 rounded">
-                            &quot;{obs.selected_word}&quot;
+                displayedObservations.map(obs => {
+                  const isMyObservation = obs.user_id === user?.id;
+                  return (
+                    <div
+                      key={obs.id}
+                      className={`p-3 rounded-lg ${
+                        isMyObservation ? "bg-blue-900/30 border-l-2 border-blue-500" : "bg-gray-700/50"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-medium text-blue-400 bg-blue-900/50 px-2 py-0.5 rounded">
+                            v{obs.start_verse}
                           </span>
+                          {obs.selected_word && (
+                            <span className="text-xs text-purple-400 bg-purple-900/30 px-2 py-0.5 rounded">
+                              &quot;{obs.selected_word}&quot;
+                            </span>
+                          )}
+                          <span className="text-xs text-gray-500 capitalize">
+                            {obs.category.replace(/_/g, " ")}
+                          </span>
+                        </div>
+                        {obs.bible_version_name && (
+                          <span className="text-xs text-gray-500">{obs.bible_version_name}</span>
                         )}
-                        <span className="text-xs text-gray-500 capitalize">
-                          {obs.category.replace(/_/g, " ")}
-                        </span>
                       </div>
-                      {obs.bible_version_name && (
-                        <span className="text-xs text-gray-500">{obs.bible_version_name}</span>
+                      <p className="text-sm text-gray-300">{obs.content}</p>
+                      {observationView !== "my" && obs.profiles?.display_name && (
+                        <p className="text-xs text-gray-500 mt-2">
+                          - {obs.profiles.display_name} {isMyObservation && <span className="text-blue-400">(you)</span>}
+                        </p>
                       )}
                     </div>
-                    <p className="text-sm text-gray-300">{obs.content}</p>
-                    {observationView === "group" && obs.profiles?.display_name && (
-                      <p className="text-xs text-gray-500 mt-2">
-                        - {obs.profiles.display_name}
-                      </p>
-                    )}
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <div className="text-center py-8">
                   <MessageSquare className="h-12 w-12 text-gray-600 mx-auto mb-3" />
                   <p className="text-gray-500 text-sm">
                     {observationView === "my"
                       ? "Right-click on any word to add an observation"
-                      : "No group observations yet"
+                      : observationView === "all"
+                        ? "No observations yet. Right-click on any word to add one."
+                        : "No group observations yet"
                     }
                   </p>
                 </div>
