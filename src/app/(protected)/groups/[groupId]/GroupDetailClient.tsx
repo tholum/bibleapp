@@ -172,17 +172,17 @@ export default function GroupDetailPage() {
       </Link>
 
       {/* Group Header */}
-      <div className="flex items-start justify-between mb-8">
-        <div className="flex items-center space-x-4">
-          <div className="p-4 bg-blue-100 rounded-xl">
-            <Users className="h-8 w-8 text-blue-600" />
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
+        <div className="flex items-start space-x-4">
+          <div className="p-3 sm:p-4 bg-blue-100 rounded-xl shrink-0">
+            <Users className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600" />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{group.name}</h1>
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{group.name}</h1>
             {group.description && (
-              <p className="text-gray-600 mt-1">{group.description}</p>
+              <p className="text-gray-600 mt-1 text-sm sm:text-base">{group.description}</p>
             )}
-            <div className="flex items-center space-x-4 mt-2">
+            <div className="flex items-center flex-wrap gap-2 sm:gap-4 mt-2">
               <span className="text-sm text-gray-500">
                 {members?.length || 0} members
               </span>
@@ -204,8 +204,8 @@ export default function GroupDetailPage() {
           </div>
         </div>
         {isAdmin && (
-          <Link href={`/groups/${groupId}/settings/`}>
-            <Button variant="outline" size="sm">
+          <Link href={`/groups/${groupId}/settings/`} className="self-start">
+            <Button variant="outline" size="sm" className="w-full sm:w-auto">
               <Settings className="h-4 w-4 mr-2" />
               Settings
             </Button>

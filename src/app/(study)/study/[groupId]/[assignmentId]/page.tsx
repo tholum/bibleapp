@@ -124,6 +124,13 @@ export default function FocusedStudyPage() {
   // View toggle for observations
   const [observationView, setObservationView] = useState<"all" | "my" | "group">("all");
 
+  // Mobile panel toggle (for bottom tab navigation)
+  const [mobileActivePanel, setMobileActivePanel] = useState<"scripture" | "observations">("scripture");
+
+  // Mobile touch selection state
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [touchSelection, setTouchSelection] = useState<{ word: string; verse: number | null } | null>(null);
+
   // Custom Bible paste modal state
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [pasteText, setPasteText] = useState("");
@@ -235,6 +242,70 @@ export default function FocusedStudyPage() {
       verse,
     });
   }, []);
+
+  // Handle touch selection for mobile (tap and hold / text selection)
+  const handleTouchSelection = useCallback(() => {
+    const selection = window.getSelection();
+    const selectedText = selection?.toString().trim();
+
+    if (!selectedText || selectedText.length === 0) return;
+
+    // Find verse number from selection
+    let verse: number | null = null;
+    const anchorNode = selection?.anchorNode;
+    if (anchorNode) {
+      let current: Node | null = anchorNode;
+      while (current && current !== passageRef.current) {
+        if (current instanceof HTMLElement) {
+          const vid = current.getAttribute("data-vid");
+          if (vid) {
+            const parts = vid.split(".");
+            verse = parseInt(parts[parts.length - 1], 10);
+            break;
+          }
+        }
+        current = current.parentNode;
+      }
+    }
+
+    // If no verse found, try to find from verse markers
+    if (!verse && passageRef.current) {
+      const range = selection?.getRangeAt(0);
+      if (range) {
+        const rect = range.getBoundingClientRect();
+        const verseElements = passageRef.current.querySelectorAll(".v");
+        let lastVerse = 1;
+        verseElements.forEach(el => {
+          const elRect = el.getBoundingClientRect();
+          if (elRect.top < rect.top) {
+            const match = el.textContent?.match(/(\d+)/);
+            if (match) lastVerse = parseInt(match[1], 10);
+          }
+        });
+        verse = lastVerse;
+      }
+    }
+
+    // Clean the word
+    const word = selectedText.replace(/[.,;:!?"'()\[\]{}]/g, "").trim();
+    if (!word) return;
+
+    setTouchSelection({ word, verse });
+    setShowMobileMenu(true);
+  }, []);
+
+  // Handle mobile menu action
+  const handleMobileMenuAction = (type: "verse" | "word") => {
+    if (!touchSelection) return;
+    setObservationType(type);
+    setSelectedVerse(touchSelection.verse);
+    setSelectedWord(type === "word" ? touchSelection.word : "");
+    setShowObservationForm(true);
+    setShowMobileMenu(false);
+    setTouchSelection(null);
+    // On mobile, switch to observations panel when adding
+    setMobileActivePanel("observations");
+  };
 
   // Fetch available Bibles
   const { data: bibles } = useQuery({
@@ -364,15 +435,33 @@ export default function FocusedStudyPage() {
     ? matchingCustomPassages.find(cp => cp.version_name === selectedBibleId.replace("custom:", ""))
     : null;
 
-  // Attach context menu handler - re-attach when passage or custom passage loads
+  // Attach context menu handler and touch selection handler
   useEffect(() => {
     const el = passageRef.current;
     const hasContent = passage?.content || selectedCustomPassage?.content;
     if (el && hasContent) {
+      // Desktop: right-click context menu
       el.addEventListener("contextmenu", handleContextMenu);
-      return () => el.removeEventListener("contextmenu", handleContextMenu);
+
+      // Mobile: selection change detection (for tap-and-hold text selection)
+      const handleSelectionChange = () => {
+        // Only trigger on touch devices and when there's a selection in our element
+        const selection = window.getSelection();
+        if (selection && selection.toString().trim() && el.contains(selection.anchorNode)) {
+          // Delay to allow selection to complete
+          setTimeout(handleTouchSelection, 100);
+        }
+      };
+
+      // Use selectionchange for mobile text selection
+      document.addEventListener("selectionchange", handleSelectionChange);
+
+      return () => {
+        el.removeEventListener("contextmenu", handleContextMenu);
+        document.removeEventListener("selectionchange", handleSelectionChange);
+      };
     }
-  }, [handleContextMenu, passage?.content, selectedCustomPassage?.content]);
+  }, [handleContextMenu, handleTouchSelection, passage?.content, selectedCustomPassage?.content]);
 
   // Add observation mutation
   const addObservationMutation = useMutation({
@@ -515,21 +604,22 @@ export default function FocusedStudyPage() {
   return (
     <div className="h-screen flex flex-col bg-gray-900 text-gray-100">
       {/* Top Bar */}
-      <header className="h-12 flex items-center justify-between px-4 bg-gray-800 border-b border-gray-700 flex-shrink-0">
-        <div className="flex items-center gap-4">
+      <header className="h-12 md:h-14 flex items-center justify-between px-2 md:px-4 bg-gray-800 border-b border-gray-700 flex-shrink-0">
+        <div className="flex items-center gap-2 md:gap-4 min-w-0">
           <button
             onClick={() => router.push(`/groups/${groupId}/assignments/${assignmentId}/`)}
-            className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
+            className="flex items-center gap-1 md:gap-2 text-gray-400 hover:text-white transition-colors p-2 -ml-1"
+            aria-label="Exit Study"
           >
-            <ArrowLeft className="h-4 w-4" />
-            <span className="text-sm">Exit Study</span>
+            <ArrowLeft className="h-5 w-5" />
+            <span className="text-sm hidden sm:inline">Exit Study</span>
           </button>
-          <div className="h-4 w-px bg-gray-700" />
-          <div className="text-sm">
-            <span className="text-gray-400">{assignment?.title}</span>
-            <span className="mx-2 text-gray-600">|</span>
+          <div className="h-4 w-px bg-gray-700 hidden sm:block" />
+          <div className="text-xs sm:text-sm truncate min-w-0">
+            <span className="text-gray-400 hidden md:inline">{assignment?.title}</span>
+            <span className="mx-2 text-gray-600 hidden md:inline">|</span>
             <span className="text-blue-400">
-              {assignment?.bible_books?.name} {assignment?.start_chapter}:{assignment?.start_verse}-{assignment?.end_verse}
+              {assignment?.bible_books?.abbreviation || assignment?.bible_books?.name} {assignment?.start_chapter}:{assignment?.start_verse}-{assignment?.end_verse}
             </span>
           </div>
         </div>
@@ -659,12 +749,12 @@ export default function FocusedStudyPage() {
       </header>
 
       {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden pb-16 md:pb-0">
         {/* Scripture Panel */}
         <div className={`flex flex-col bg-gray-850 transition-all duration-300 ${
-          isFullscreen || !showRightPanel ? "w-full" : "w-1/2"
-        }`}>
-          <div className="flex-1 overflow-y-auto p-6 lg:p-8">
+          isFullscreen || !showRightPanel ? "w-full" : "w-full md:w-1/2"
+        } ${mobileActivePanel === "scripture" ? "flex-1" : "hidden md:flex md:flex-1"}`}>
+          <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
             {selectedCustomPassage ? (
               // Show custom passage
               <div
@@ -716,7 +806,9 @@ export default function FocusedStudyPage() {
 
         {/* Right Panel - Observations & Tools */}
         {showRightPanel && !isFullscreen && (
-          <div className="w-1/2 flex flex-col border-l border-gray-700 bg-gray-800">
+          <div className={`w-full md:w-1/2 flex flex-col border-t md:border-t-0 md:border-l border-gray-700 bg-gray-800 ${
+            mobileActivePanel === "observations" ? "flex-1" : "hidden md:flex"
+          }`}>
             {/* Observation Form */}
             {showObservationForm && (
               <div className="p-4 border-b border-gray-700 bg-gray-750">
@@ -994,6 +1086,77 @@ export default function FocusedStudyPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Mobile Bottom Tab Bar */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-gray-800 border-t border-gray-700">
+        <div className="flex safe-area-bottom">
+          <button
+            onClick={() => setMobileActivePanel("scripture")}
+            className={`flex-1 py-3 flex flex-col items-center gap-1 transition-colors ${
+              mobileActivePanel === "scripture" ? "text-blue-400" : "text-gray-500"
+            }`}
+          >
+            <BookOpen className="h-5 w-5" />
+            <span className="text-xs">Scripture</span>
+          </button>
+          <button
+            onClick={() => setMobileActivePanel("observations")}
+            className={`flex-1 py-3 flex flex-col items-center gap-1 transition-colors ${
+              mobileActivePanel === "observations" ? "text-purple-400" : "text-gray-500"
+            }`}
+          >
+            <MessageSquare className="h-5 w-5" />
+            <span className="text-xs">Notes ({allObservations.length})</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile Action Sheet (for text selection on touch devices) */}
+      {showMobileMenu && touchSelection && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-50 bg-black/50 md:hidden"
+            onClick={() => {
+              setShowMobileMenu(false);
+              setTouchSelection(null);
+            }}
+          />
+          {/* Action Sheet */}
+          <div className="fixed inset-x-0 bottom-0 z-50 bg-gray-800 border-t border-gray-700 rounded-t-2xl p-4 pb-8 md:hidden animate-slide-up">
+            <div className="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4" />
+            <p className="text-center text-sm text-gray-400 mb-4">
+              Selected: &quot;{touchSelection.word}&quot;
+              {touchSelection.verse && <span className="text-gray-500"> (Verse {touchSelection.verse})</span>}
+            </p>
+            <div className="space-y-2">
+              <button
+                onClick={() => handleMobileMenuAction("verse")}
+                className="w-full py-3 bg-gray-700 hover:bg-gray-600 rounded-lg text-white flex items-center justify-center gap-2 min-h-[48px]"
+              >
+                <MessageSquare className="h-5 w-5 text-blue-400" />
+                Observe Verse {touchSelection.verse}
+              </button>
+              <button
+                onClick={() => handleMobileMenuAction("word")}
+                className="w-full py-3 bg-gray-700 hover:bg-gray-600 rounded-lg text-white flex items-center justify-center gap-2 min-h-[48px]"
+              >
+                <BookOpen className="h-5 w-5 text-purple-400" />
+                Observe Word &quot;{touchSelection.word}&quot;
+              </button>
+              <button
+                onClick={() => {
+                  setShowMobileMenu(false);
+                  setTouchSelection(null);
+                }}
+                className="w-full py-3 text-gray-400 hover:text-white min-h-[48px]"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

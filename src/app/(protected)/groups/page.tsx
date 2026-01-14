@@ -55,24 +55,24 @@ export default function GroupsPage() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">My Study Groups</h1>
-          <p className="text-gray-600 mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">My Study Groups</h1>
+          <p className="text-gray-600 mt-1 text-sm sm:text-base">
             Manage your study groups and assignments
           </p>
         </div>
-        <div className="flex items-center space-x-3">
-          <Link href="/groups/join/">
-            <Button variant="outline">
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <Link href="/groups/join/" className="flex-1 sm:flex-initial">
+            <Button variant="outline" className="w-full sm:w-auto">
               <UserPlus className="h-4 w-4 mr-2" />
-              Join Group
+              Join
             </Button>
           </Link>
-          <Link href="/groups/create/">
-            <Button>
+          <Link href="/groups/create/" className="flex-1 sm:flex-initial">
+            <Button className="w-full sm:w-auto">
               <Plus className="h-4 w-4 mr-2" />
-              Create Group
+              Create
             </Button>
           </Link>
         </div>
