@@ -95,7 +95,7 @@ export default function GroupSettingsPage() {
         .update({
           shared_api_bible_key: profile.api_bible_key,
           shared_api_bible_key_by: user.id,
-        })
+        } as never)
         .eq("id", groupId);
 
       if (error) throw error;
@@ -120,7 +120,7 @@ export default function GroupSettingsPage() {
         .update({
           shared_api_bible_key: null,
           shared_api_bible_key_by: null,
-        })
+        } as never)
         .eq("id", groupId);
 
       if (error) throw error;
