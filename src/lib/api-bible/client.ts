@@ -247,5 +247,4 @@ export function buildPassageId(
   }
 }
 
-export { DEFAULT_BIBLE_ID };
 export type { Bible, Book, Chapter, Verse, Passage };
