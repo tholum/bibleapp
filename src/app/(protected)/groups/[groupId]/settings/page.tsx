@@ -44,18 +44,20 @@ export default function GroupSettingsPage() {
 
       if (error) throw error;
 
+      const groupData = data as StudyGroup;
+
       // Fetch sharer profile if there's a shared key
-      if (data?.shared_api_bible_key_by) {
+      if (groupData?.shared_api_bible_key_by) {
         const { data: sharerProfile } = await supabase
           .from("profiles")
           .select("display_name")
-          .eq("id", data.shared_api_bible_key_by)
+          .eq("id", groupData.shared_api_bible_key_by)
           .single();
 
-        return { ...data, sharer_profile: sharerProfile } as GroupWithSharer;
+        return { ...groupData, sharer_profile: sharerProfile } as GroupWithSharer;
       }
 
-      return data as GroupWithSharer;
+      return groupData as GroupWithSharer;
     },
   });
 

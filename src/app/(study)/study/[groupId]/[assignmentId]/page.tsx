@@ -77,16 +77,16 @@ export default function FocusedStudyPage() {
 
   // Fetch group for shared API key
   const { data: group } = useQuery({
-    queryKey: ["group", groupId],
-    queryFn: async () => {
+    queryKey: ["group-shared-key", groupId],
+    queryFn: async (): Promise<{ shared_api_bible_key: string | null } | null> => {
       const { data, error } = await supabase
         .from("study_groups")
-        .select("shared_api_bible_key, shared_api_bible_key_by")
+        .select("shared_api_bible_key")
         .eq("id", groupId)
         .single();
 
       if (error) throw error;
-      return data;
+      return data as { shared_api_bible_key: string | null };
     },
   });
 
