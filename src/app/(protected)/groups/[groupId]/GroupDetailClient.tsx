@@ -17,6 +17,7 @@ import {
   BookOpen,
   ChevronRight,
   ArrowLeft,
+  Play,
 } from "lucide-react";
 import { format } from "date-fns";
 import { useState } from "react";
@@ -264,13 +265,15 @@ export default function GroupDetailPage() {
               ) : assignments && assignments.length > 0 ? (
                 <div className="space-y-3">
                   {assignments.map((assignment) => (
-                    <Link
+                    <div
                       key={assignment.id}
-                      href={`/groups/${groupId}/assignments/${assignment.id}/`}
-                      className="block p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                      className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                     >
                       <div className="flex items-start justify-between">
-                        <div>
+                        <Link
+                          href={`/groups/${groupId}/assignments/${assignment.id}/`}
+                          className="flex-1 min-w-0"
+                        >
                           <div className="flex items-center space-x-2">
                             <h4 className="font-medium text-gray-900">
                               {assignment.title}
@@ -305,10 +308,20 @@ export default function GroupDetailPage() {
                               )}
                             </p>
                           )}
+                        </Link>
+                        <div className="flex items-center space-x-2 ml-4">
+                          <Link href={`/study/${groupId}/${assignment.id}/`}>
+                            <Button size="sm">
+                              <Play className="h-4 w-4 mr-1" />
+                              Study
+                            </Button>
+                          </Link>
+                          <Link href={`/groups/${groupId}/assignments/${assignment.id}/`}>
+                            <ChevronRight className="h-5 w-5 text-gray-400" />
+                          </Link>
                         </div>
-                        <ChevronRight className="h-5 w-5 text-gray-400" />
                       </div>
-                    </Link>
+                    </div>
                   ))}
                 </div>
               ) : (

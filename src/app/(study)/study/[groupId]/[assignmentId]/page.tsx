@@ -19,9 +19,12 @@ import {
   Users,
   PanelRightClose,
   PanelRight,
+  ClipboardPaste,
+  AlertCircle,
 } from "lucide-react";
 import { getPassage, getBibles, buildPassageId, DEFAULT_BIBLE_ID } from "@/lib/api-bible/client";
-import type { ObservationCategory, Assignment, Observation, ObservationInsert } from "@/types/database";
+import { parseCustomBibleText } from "@/lib/custom-bible-parser";
+import type { ObservationCategory, Assignment, Observation, ObservationInsert, CustomBiblePassage, CustomBiblePassageInsert } from "@/types/database";
 
 type AssignmentWithBook = Assignment & {
   bible_books: { name: string; abbreviation: string } | null;
@@ -120,6 +123,12 @@ export default function FocusedStudyPage() {
 
   // View toggle for observations
   const [observationView, setObservationView] = useState<"all" | "my" | "group">("all");
+
+  // Custom Bible paste modal state
+  const [showPasteModal, setShowPasteModal] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+  const [pasteError, setPasteError] = useState<string | null>(null);
+  const [pastePreview, setPastePreview] = useState<ReturnType<typeof parseCustomBibleText>>(null);
 
   // Close context menu when clicking outside
   useEffect(() => {
@@ -265,7 +274,10 @@ export default function FocusedStudyPage() {
     },
   });
 
-  // Fetch passage
+  // Check if a custom version is selected
+  const isCustomVersionSelected = selectedBibleId.startsWith("custom:");
+
+  // Fetch passage (only when NOT using a custom version)
   const { data: passage, isLoading: passageLoading } = useQuery({
     queryKey: ["passage", apiKey, selectedBibleId, assignment?.bible_books?.abbreviation, assignment?.start_chapter, assignment?.start_verse, assignment?.end_chapter, assignment?.end_verse],
     queryFn: async (): Promise<PassageResult> => {
@@ -284,17 +296,8 @@ export default function FocusedStudyPage() {
         includeVerseNumbers: true,
       });
     },
-    enabled: !!assignment?.bible_books?.abbreviation && !!apiKey,
+    enabled: !!assignment?.bible_books?.abbreviation && !!apiKey && !isCustomVersionSelected,
   });
-
-  // Attach context menu handler - re-attach when passage loads
-  useEffect(() => {
-    const el = passageRef.current;
-    if (el && passage?.content) {
-      el.addEventListener("contextmenu", handleContextMenu);
-      return () => el.removeEventListener("contextmenu", handleContextMenu);
-    }
-  }, [handleContextMenu, passage?.content]);
 
   // Fetch observations
   const { data: observations } = useQuery({
@@ -316,6 +319,60 @@ export default function FocusedStudyPage() {
       return (data as ObservationWithProfile[]) || [];
     },
   });
+
+  // Fetch custom passages for this group
+  const { data: customPassages } = useQuery({
+    queryKey: ["custom-passages", groupId],
+    queryFn: async (): Promise<CustomBiblePassage[]> => {
+      console.log("Fetching custom passages for group:", groupId);
+      const { data, error } = await supabase
+        .from("custom_bible_passages")
+        .select("*")
+        .eq("group_id", groupId)
+        .order("created_at", { ascending: false });
+
+      console.log("Custom passages fetch result:", { data, error });
+      if (error) {
+        console.error("Error fetching custom passages:", error);
+        throw error;
+      }
+      return (data as CustomBiblePassage[]) || [];
+    },
+  });
+
+  // Get custom passages that match the current assignment's passage
+  const matchingCustomPassages = customPassages?.filter(cp => {
+    if (!assignment?.bible_books?.abbreviation) return false;
+    // Match if the custom passage covers the assignment's passage
+    return (
+      cp.start_chapter === assignment.start_chapter &&
+      cp.start_verse <= assignment.start_verse &&
+      cp.end_verse >= assignment.end_verse
+    );
+  }) || [];
+
+  // Get unique custom versions for dropdown
+  const customVersions = [...new Set(matchingCustomPassages.map(cp => cp.version_name))].map(name => ({
+    id: `custom:${name}`,
+    name: `${name} (Custom)`,
+    abbreviation: name,
+    isCustom: true,
+  }));
+
+  // Get the current custom passage content if a custom version is selected
+  const selectedCustomPassage = selectedBibleId.startsWith("custom:")
+    ? matchingCustomPassages.find(cp => cp.version_name === selectedBibleId.replace("custom:", ""))
+    : null;
+
+  // Attach context menu handler - re-attach when passage or custom passage loads
+  useEffect(() => {
+    const el = passageRef.current;
+    const hasContent = passage?.content || selectedCustomPassage?.content;
+    if (el && hasContent) {
+      el.addEventListener("contextmenu", handleContextMenu);
+      return () => el.removeEventListener("contextmenu", handleContextMenu);
+    }
+  }, [handleContextMenu, passage?.content, selectedCustomPassage?.content]);
 
   // Add observation mutation
   const addObservationMutation = useMutation({
@@ -354,6 +411,88 @@ export default function FocusedStudyPage() {
     setSelectedVerse(null);
     setSelectedWord("");
     setObservationType("verse");
+  };
+
+  // Save custom passage mutation
+  const saveCustomPassageMutation = useMutation({
+    mutationFn: async (parsed: NonNullable<ReturnType<typeof parseCustomBibleText>>) => {
+      if (!user?.id) {
+        throw new Error("You must be logged in to save custom passages");
+      }
+
+      const newPassage: CustomBiblePassageInsert = {
+        group_id: groupId,
+        version_name: parsed.versionName,
+        book_abbreviation: parsed.bookAbbreviation,
+        book_name: parsed.bookName,
+        start_chapter: parsed.startChapter,
+        start_verse: parsed.startVerse,
+        end_chapter: parsed.endChapter,
+        end_verse: parsed.endVerse,
+        content: parsed.htmlContent,
+        raw_text: parsed.rawText,
+        created_by: user.id,
+      };
+
+      console.log("Saving custom passage:", newPassage);
+      // Note: Using 'as never' due to types not being regenerated for new table
+      const { data, error } = await supabase
+        .from("custom_bible_passages")
+        .insert(newPassage as never)
+        .select();
+      console.log("Save result:", { data, error });
+      if (error) {
+        console.error("Supabase error:", error);
+        throw new Error(error.message || "Database error");
+      }
+      return data;
+    },
+    onSuccess: (data) => {
+      console.log("Custom passage saved successfully:", data);
+      queryClient.invalidateQueries({ queryKey: ["custom-passages", groupId] });
+      // Auto-select the new custom version
+      if (pastePreview) {
+        setSelectedBibleId(`custom:${pastePreview.versionName}`);
+      }
+      resetPasteModal();
+    },
+    onError: (error) => {
+      console.error("Failed to save custom passage:", error);
+      setPasteError(`Failed to save: ${error.message}`);
+    },
+  });
+
+  const resetPasteModal = () => {
+    setShowPasteModal(false);
+    setPasteText("");
+    setPasteError(null);
+    setPastePreview(null);
+  };
+
+  const handlePasteTextChange = (text: string) => {
+    setPasteText(text);
+    setPasteError(null);
+    setPastePreview(null);
+
+    if (!text.trim()) return;
+
+    const parsed = parseCustomBibleText(text);
+    if (!parsed) {
+      setPasteError("Could not parse the text. Expected format: [Book Chapter:Verse-Verse Version] 1 text 2 text...");
+      return;
+    }
+
+    setPastePreview(parsed);
+  };
+
+  const handleSaveCustomPassage = () => {
+    console.log("handleSaveCustomPassage called, pastePreview:", pastePreview);
+    if (!pastePreview) {
+      console.log("No pastePreview, returning early");
+      return;
+    }
+    console.log("Calling mutation...");
+    saveCustomPassageMutation.mutate(pastePreview);
   };
 
   const handleContextMenuAction = (type: "verse" | "word") => {
@@ -397,61 +536,109 @@ export default function FocusedStudyPage() {
 
         <div className="flex items-center gap-2">
           {/* Bible Version Selector */}
-          {englishBibles.length > 0 && (
-            <div ref={bibleDropdownRef} className="relative">
-              <button
-                type="button"
-                onClick={() => setBibleDropdownOpen(!bibleDropdownOpen)}
-                className="flex items-center gap-2 text-sm px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
-              >
-                <BookOpen className="h-4 w-4 text-gray-400" />
-                <span>{selectedBible?.abbreviation || "Select"}</span>
-                <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${bibleDropdownOpen ? "rotate-180" : ""}`} />
-              </button>
+          <div ref={bibleDropdownRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setBibleDropdownOpen(!bibleDropdownOpen)}
+              className="flex items-center gap-2 text-sm px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+            >
+              <BookOpen className="h-4 w-4 text-gray-400" />
+              <span>
+                {selectedBibleId.startsWith("custom:")
+                  ? selectedBibleId.replace("custom:", "") + " (Custom)"
+                  : selectedBible?.abbreviation || "Select"}
+              </span>
+              <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${bibleDropdownOpen ? "rotate-180" : ""}`} />
+            </button>
 
-              {bibleDropdownOpen && (
-                <div className="absolute right-0 top-full mt-1 w-72 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50">
-                  <div className="p-2 border-b border-gray-700">
-                    <div className="relative">
-                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-                      <input
-                        type="text"
-                        value={bibleSearchQuery}
-                        onChange={(e) => setBibleSearchQuery(e.target.value)}
-                        placeholder="Search translations..."
-                        className="w-full pl-8 pr-3 py-1.5 text-sm bg-gray-700 border border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-white placeholder-gray-500"
-                        autoFocus
-                      />
-                    </div>
-                  </div>
-                  <div className="max-h-64 overflow-y-auto py-1">
-                    {filteredBibles.map((bible) => (
-                      <button
-                        key={bible.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedBibleId(bible.id);
-                          setBibleDropdownOpen(false);
-                          setBibleSearchQuery("");
-                        }}
-                        className={`w-full flex items-start gap-3 px-3 py-2 text-left hover:bg-gray-700 ${
-                          bible.id === selectedBibleId ? "bg-gray-700" : ""
-                        }`}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm text-white">{bible.abbreviation}</div>
-                          <div className="text-xs text-gray-400 truncate">{bible.name}</div>
-                        </div>
-                        {bible.id === selectedBibleId && (
-                          <Check className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
-                        )}
-                      </button>
-                    ))}
+            {bibleDropdownOpen && (
+              <div className="absolute right-0 top-full mt-1 w-72 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50">
+                <div className="p-2 border-b border-gray-700">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                    <input
+                      type="text"
+                      value={bibleSearchQuery}
+                      onChange={(e) => setBibleSearchQuery(e.target.value)}
+                      placeholder="Search translations..."
+                      className="w-full pl-8 pr-3 py-1.5 text-sm bg-gray-700 border border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-white placeholder-gray-500"
+                      autoFocus
+                    />
                   </div>
                 </div>
-              )}
-            </div>
-          )}
+                <div className="max-h-64 overflow-y-auto py-1">
+                  {/* Custom versions section */}
+                  {customVersions.length > 0 && (
+                    <>
+                      <div className="px-3 py-1.5 text-xs text-gray-500 font-medium uppercase tracking-wide">
+                        Custom Versions
+                      </div>
+                      {customVersions.map((cv) => (
+                        <button
+                          key={cv.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedBibleId(cv.id);
+                            setBibleDropdownOpen(false);
+                            setBibleSearchQuery("");
+                          }}
+                          className={`w-full flex items-start gap-3 px-3 py-2 text-left hover:bg-gray-700 ${
+                            cv.id === selectedBibleId ? "bg-gray-700" : ""
+                          }`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm text-purple-400">{cv.abbreviation}</div>
+                            <div className="text-xs text-gray-400 truncate">{cv.name}</div>
+                          </div>
+                          {cv.id === selectedBibleId && (
+                            <Check className="h-4 w-4 text-purple-400 flex-shrink-0 mt-0.5" />
+                          )}
+                        </button>
+                      ))}
+                      <div className="my-1 border-t border-gray-700" />
+                    </>
+                  )}
+                  {/* API Bibles section */}
+                  {englishBibles.length > 0 && (
+                    <div className="px-3 py-1.5 text-xs text-gray-500 font-medium uppercase tracking-wide">
+                      API.Bible Versions
+                    </div>
+                  )}
+                  {filteredBibles.map((bible) => (
+                    <button
+                      key={bible.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedBibleId(bible.id);
+                        setBibleDropdownOpen(false);
+                        setBibleSearchQuery("");
+                      }}
+                      className={`w-full flex items-start gap-3 px-3 py-2 text-left hover:bg-gray-700 ${
+                        bible.id === selectedBibleId ? "bg-gray-700" : ""
+                      }`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm text-white">{bible.abbreviation}</div>
+                        <div className="text-xs text-gray-400 truncate">{bible.name}</div>
+                      </div>
+                      {bible.id === selectedBibleId && (
+                        <Check className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Paste Custom Button */}
+          <button
+            onClick={() => setShowPasteModal(true)}
+            className="p-2 text-gray-400 hover:text-purple-400 hover:bg-gray-700 rounded-lg transition-colors"
+            title="Paste custom Bible text"
+          >
+            <ClipboardPaste className="h-4 w-4" />
+          </button>
 
           <button
             onClick={() => setShowRightPanel(!showRightPanel)}
@@ -478,7 +665,14 @@ export default function FocusedStudyPage() {
           isFullscreen || !showRightPanel ? "w-full" : "w-1/2"
         }`}>
           <div className="flex-1 overflow-y-auto p-6 lg:p-8">
-            {passageLoading ? (
+            {selectedCustomPassage ? (
+              // Show custom passage
+              <div
+                ref={passageRef}
+                className="prose prose-invert prose-lg max-w-3xl mx-auto bible-text-dark select-text cursor-text"
+                dangerouslySetInnerHTML={{ __html: selectedCustomPassage.content }}
+              />
+            ) : passageLoading ? (
               <div className="space-y-3 max-w-3xl mx-auto">
                 {[1, 2, 3, 4, 5].map(i => (
                   <div key={i} className="h-6 bg-gray-800 rounded animate-pulse" />
@@ -490,13 +684,21 @@ export default function FocusedStudyPage() {
                 className="prose prose-invert prose-lg max-w-3xl mx-auto bible-text-dark select-text cursor-text"
                 dangerouslySetInnerHTML={{ __html: passage.content }}
               />
-            ) : !apiKey ? (
+            ) : !apiKey && !selectedBibleId.startsWith("custom:") ? (
               <div className="text-center py-12 max-w-md mx-auto">
                 <BookOpen className="h-16 w-16 text-gray-600 mx-auto mb-4" />
-                <p className="text-gray-400 mb-4">Configure your API.Bible key in settings to view Scripture.</p>
-                <Link href="/settings/" className="text-blue-400 hover:text-blue-300">
-                  Go to Settings
-                </Link>
+                <p className="text-gray-400 mb-4">Configure your API.Bible key in settings to view Scripture, or paste a custom version.</p>
+                <div className="flex items-center justify-center gap-4">
+                  <Link href="/settings/" className="text-blue-400 hover:text-blue-300">
+                    Go to Settings
+                  </Link>
+                  <button
+                    onClick={() => setShowPasteModal(true)}
+                    className="text-purple-400 hover:text-purple-300"
+                  >
+                    Paste Custom
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="text-center py-12">
@@ -692,6 +894,105 @@ export default function FocusedStudyPage() {
             <BookOpen className="h-4 w-4 text-purple-400" />
             Observe Word &quot;{contextMenu.word}&quot;
           </button>
+        </div>
+      )}
+
+      {/* Paste Custom Bible Modal */}
+      {showPasteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-700">
+              <div>
+                <h2 className="text-lg font-semibold text-white">Paste Custom Bible Text</h2>
+                <p className="text-sm text-gray-400 mt-1">
+                  Paste text from your Bible software. Format: [Book Chapter:Verse-Verse Version] text...
+                </p>
+              </div>
+              <button
+                onClick={resetPasteModal}
+                className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto p-4">
+              <textarea
+                value={pasteText}
+                onChange={(e) => handlePasteTextChange(e.target.value)}
+                placeholder={`Example:\n[Phl 2:1-11 ESV] 1 So if there is any encouragement in Christ, any comfort from love... 2 complete my joy by being of the same mind...`}
+                className="w-full h-40 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white placeholder-gray-500 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none"
+                autoFocus
+              />
+
+              {/* Error Message */}
+              {(pasteError || saveCustomPassageMutation.isError) && (
+                <div className="mt-3 flex items-start gap-2 p-3 bg-red-900/30 border border-red-700 rounded-lg">
+                  <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-red-300">
+                    {pasteError || (saveCustomPassageMutation.error as Error)?.message || "Failed to save"}
+                  </p>
+                </div>
+              )}
+
+              {/* Preview */}
+              {pastePreview && (
+                <div className="mt-4">
+                  <h3 className="text-sm font-medium text-gray-300 mb-2">Preview</h3>
+                  <div className="p-4 bg-gray-900 rounded-lg border border-gray-700">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="px-2 py-1 bg-purple-900/50 text-purple-300 text-xs rounded font-medium">
+                        {pastePreview.versionName}
+                      </span>
+                      <span className="text-sm text-gray-400">
+                        {pastePreview.bookName || pastePreview.bookAbbreviation} {pastePreview.startChapter}:{pastePreview.startVerse}-{pastePreview.endVerse}
+                      </span>
+                    </div>
+                    <div className="text-sm text-gray-300 space-y-2 max-h-48 overflow-y-auto">
+                      {pastePreview.verses.slice(0, 5).map((verse) => (
+                        <p key={verse.number}>
+                          <span className="text-purple-400 font-medium mr-1">{verse.number}</span>
+                          {verse.text}
+                        </p>
+                      ))}
+                      {pastePreview.verses.length > 5 && (
+                        <p className="text-gray-500 italic">...and {pastePreview.verses.length - 5} more verses</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Help Text */}
+              <div className="mt-4 p-3 bg-gray-900/50 rounded-lg">
+                <h4 className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Supported Formats</h4>
+                <ul className="text-xs text-gray-500 space-y-1">
+                  <li>[Phl 2:1-11 ESV] 1 text 2 text...</li>
+                  <li>[John 3:16 NIV] 16 For God so loved...</li>
+                  <li>[Gen 1:1-2:3 KJV] 1 In the beginning...</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-3 p-4 border-t border-gray-700">
+              <button
+                onClick={resetPasteModal}
+                className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveCustomPassage}
+                disabled={!pastePreview || saveCustomPassageMutation.isPending}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg text-sm font-medium text-white transition-colors"
+              >
+                {saveCustomPassageMutation.isPending ? "Saving..." : "Save Custom Version"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

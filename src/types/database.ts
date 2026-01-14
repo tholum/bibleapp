@@ -319,6 +319,56 @@ export interface Database {
           updated_at?: string;
         };
       };
+      custom_bible_passages: {
+        Row: {
+          id: string;
+          group_id: string;
+          version_name: string;
+          book_abbreviation: string;
+          book_name: string | null;
+          start_chapter: number;
+          start_verse: number;
+          end_chapter: number;
+          end_verse: number;
+          content: string;
+          raw_text: string;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          group_id: string;
+          version_name: string;
+          book_abbreviation: string;
+          book_name?: string | null;
+          start_chapter: number;
+          start_verse: number;
+          end_chapter: number;
+          end_verse: number;
+          content: string;
+          raw_text: string;
+          created_by: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          group_id?: string;
+          version_name?: string;
+          book_abbreviation?: string;
+          book_name?: string | null;
+          start_chapter?: number;
+          start_verse?: number;
+          end_chapter?: number;
+          end_verse?: number;
+          content?: string;
+          raw_text?: string;
+          created_by?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
     Views: {
       [_ in never]: never;
@@ -357,3 +407,5 @@ export type StudyGroupInsert = Database["public"]["Tables"]["study_groups"]["Ins
 export type GroupMembershipInsert = Database["public"]["Tables"]["group_memberships"]["Insert"];
 export type AssignmentInsert = Database["public"]["Tables"]["assignments"]["Insert"];
 export type ObservationInsert = Database["public"]["Tables"]["observations"]["Insert"];
+export type CustomBiblePassage = Database["public"]["Tables"]["custom_bible_passages"]["Row"];
+export type CustomBiblePassageInsert = Database["public"]["Tables"]["custom_bible_passages"]["Insert"];
