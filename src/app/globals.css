@@ -55,8 +55,9 @@ body {
 
 /* Dark mode Bible text styling for focused study */
 .bible-text-dark {
-  font-size: 1.25rem;
-  line-height: 2;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.8;
   color: #e5e7eb;
 }
 
