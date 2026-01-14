@@ -72,9 +72,26 @@ export default function FocusedStudyPage() {
   const assignmentId = params.assignmentId as string;
   const { user, profile } = useAuthStore();
   const queryClient = useQueryClient();
-  const apiKey = profile?.api_bible_key;
   const passageRef = useRef<HTMLDivElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
+
+  // Fetch group for shared API key
+  const { data: group } = useQuery({
+    queryKey: ["group", groupId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("study_groups")
+        .select("shared_api_bible_key, shared_api_bible_key_by")
+        .eq("id", groupId)
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Use user's API key, or fall back to group's shared key
+  const apiKey = profile?.api_bible_key || group?.shared_api_bible_key || null;
 
   // UI State
   const [isFullscreen, setIsFullscreen] = useState(false);

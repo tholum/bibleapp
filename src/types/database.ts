@@ -141,6 +141,8 @@ export interface Database {
           invite_code: string | null;
           max_members: number;
           created_by: string;
+          shared_api_bible_key: string | null;
+          shared_api_bible_key_by: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -153,6 +155,8 @@ export interface Database {
           invite_code?: string | null;
           max_members?: number;
           created_by: string;
+          shared_api_bible_key?: string | null;
+          shared_api_bible_key_by?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -165,6 +169,8 @@ export interface Database {
           invite_code?: string | null;
           max_members?: number;
           created_by?: string;
+          shared_api_bible_key?: string | null;
+          shared_api_bible_key_by?: string | null;
           created_at?: string;
           updated_at?: string;
         };
