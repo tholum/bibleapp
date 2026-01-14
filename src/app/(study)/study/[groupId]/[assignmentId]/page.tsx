@@ -210,15 +210,6 @@ export default function FocusedStudyPage() {
     });
   }, []);
 
-  // Attach context menu handler - re-attach when passage loads
-  useEffect(() => {
-    const el = passageRef.current;
-    if (el && passage?.content) {
-      el.addEventListener("contextmenu", handleContextMenu);
-      return () => el.removeEventListener("contextmenu", handleContextMenu);
-    }
-  }, [handleContextMenu, passage?.content]);
-
   // Fetch available Bibles
   const { data: bibles } = useQuery({
     queryKey: ["bibles", apiKey],
@@ -278,6 +269,15 @@ export default function FocusedStudyPage() {
     },
     enabled: !!assignment?.bible_books?.abbreviation && !!apiKey,
   });
+
+  // Attach context menu handler - re-attach when passage loads
+  useEffect(() => {
+    const el = passageRef.current;
+    if (el && passage?.content) {
+      el.addEventListener("contextmenu", handleContextMenu);
+      return () => el.removeEventListener("contextmenu", handleContextMenu);
+    }
+  }, [handleContextMenu, passage?.content]);
 
   // Fetch observations
   const { data: observations } = useQuery({
