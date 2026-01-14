@@ -18,6 +18,8 @@ import {
   ChevronRight,
   ArrowLeft,
   Play,
+  Share2,
+  Link as LinkIcon,
 } from "lucide-react";
 import { format } from "date-fns";
 import { useState } from "react";
@@ -36,6 +38,7 @@ export default function GroupDetailPage() {
   const groupId = params.groupId as string;
   const { user } = useAuthStore();
   const [copied, setCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   // Fetch group details
   const { data: group, isLoading: groupLoading } = useQuery({
@@ -126,6 +129,15 @@ export default function GroupDetailPage() {
     }
   };
 
+  const copyShareLink = () => {
+    if (group?.invite_code) {
+      const shareUrl = `${window.location.origin}/invite/${group.invite_code}`;
+      navigator.clipboard.writeText(shareUrl);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    }
+  };
+
   if (groupLoading) {
     return (
       <div className="max-w-4xl mx-auto">
@@ -205,29 +217,52 @@ export default function GroupDetailPage() {
       {group.invite_code && (
         <Card className="mb-8 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
           <CardContent className="p-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <h3 className="font-medium text-gray-900">Invite Code</h3>
+                <h3 className="font-medium text-gray-900">Invite Members</h3>
                 <p className="text-sm text-gray-600 mt-1">
-                  Share this code with others to invite them to join
+                  Share the link or code to invite others to join
                 </p>
               </div>
-              <div className="flex items-center space-x-3">
-                <span className="font-mono text-2xl font-bold tracking-widest text-blue-600">
-                  {group.invite_code}
-                </span>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                {/* Share Link Button */}
                 <Button
-                  variant="outline"
+                  variant="primary"
                   size="sm"
-                  onClick={copyInviteCode}
+                  onClick={copyShareLink}
                   className="shrink-0"
                 >
-                  {copied ? (
-                    <Check className="h-4 w-4 text-green-600" />
+                  {linkCopied ? (
+                    <>
+                      <Check className="h-4 w-4 mr-2 text-green-200" />
+                      Link Copied!
+                    </>
                   ) : (
-                    <Copy className="h-4 w-4" />
+                    <>
+                      <Share2 className="h-4 w-4 mr-2" />
+                      Copy Invite Link
+                    </>
                   )}
                 </Button>
+                {/* Invite Code */}
+                <div className="flex items-center space-x-2 bg-white/50 rounded-lg px-3 py-2">
+                  <span className="text-xs text-gray-500 uppercase tracking-wide">Code:</span>
+                  <span className="font-mono text-lg font-bold tracking-widest text-blue-600">
+                    {group.invite_code}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={copyInviteCode}
+                    className="shrink-0 p-1 h-auto"
+                  >
+                    {copied ? (
+                      <Check className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <Copy className="h-4 w-4 text-gray-500" />
+                    )}
+                  </Button>
+                </div>
               </div>
             </div>
           </CardContent>

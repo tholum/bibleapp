@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import { getPendingInvite, clearPendingInvite } from "@/lib/pending-invite";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { BookOpen } from "lucide-react";
 
@@ -10,6 +11,7 @@ export default function AuthCallbackClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string>("Signing you in...");
 
   useEffect(() => {
     const handleCallback = async () => {
@@ -35,7 +37,72 @@ export default function AuthCallbackClient() {
         }
 
         if (session) {
-          router.push("/dashboard/");
+          // Check for pending invite
+          const pendingInvite = getPendingInvite();
+
+          if (pendingInvite) {
+            setStatus("Joining group...");
+
+            try {
+              // Find the group by invite code
+              const { data: groupData, error: findError } = await supabase
+                .from("study_groups")
+                .select("id, name")
+                .eq("invite_code", pendingInvite.inviteCode)
+                .single();
+
+              if (findError || !groupData) {
+                console.error("Could not find group:", findError);
+                clearPendingInvite();
+                router.push("/dashboard/");
+                return;
+              }
+
+              const group = groupData as { id: string; name: string };
+
+              // Check if already a member
+              const { data: existingMembership } = await supabase
+                .from("group_memberships")
+                .select("id")
+                .eq("group_id", group.id)
+                .eq("user_id", session.user.id)
+                .single();
+
+              if (existingMembership) {
+                // Already a member, just redirect to group
+                clearPendingInvite();
+                router.push(`/groups/${group.id}/`);
+                return;
+              }
+
+              // Join the group
+              const { error: joinError } = await supabase
+                .from("group_memberships")
+                .insert({
+                  group_id: group.id,
+                  user_id: session.user.id,
+                  role: "member",
+                } as never);
+
+              if (joinError) {
+                console.error("Failed to join group:", joinError);
+                clearPendingInvite();
+                router.push("/dashboard/");
+                return;
+              }
+
+              // Successfully joined - redirect to group
+              clearPendingInvite();
+              router.push(`/groups/${group.id}/`);
+            } catch (err) {
+              console.error("Error processing pending invite:", err);
+              clearPendingInvite();
+              router.push("/dashboard/");
+            }
+          } else {
+            // No pending invite, go to dashboard
+            router.push("/dashboard/");
+          }
         } else {
           // If no session, redirect to login
           router.push("/login/");
@@ -78,7 +145,7 @@ export default function AuthCallbackClient() {
               <BookOpen className="h-8 w-8 text-blue-600" />
             </div>
           </div>
-          <CardTitle>Signing you in...</CardTitle>
+          <CardTitle>{status}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex justify-center">
