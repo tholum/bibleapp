@@ -65,12 +65,13 @@ body {
 }
 
 .bible-text-dark .v {
-  font-weight: 600;
+  font-weight: 500;
   color: #60a5fa;
-  font-size: 0.7em;
+  font-size: 0.55em;
   vertical-align: super;
-  margin-right: 0.25rem;
-  opacity: 0.8;
+  margin-right: 0.4em;
+  margin-left: 0.1em;
+  opacity: 0.7;
 }
 
 .bible-text-dark .wj {
